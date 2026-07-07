@@ -1,6 +1,13 @@
 import os
 import hashlib
+import difflib 
 from typing import Dict
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+
+console = Console()
 
 from debugger.test_runner import TestRunner
 from debugger.patcher import CodePatcher
@@ -64,8 +71,8 @@ class StateMachineDebugger:
             
             context = self.gather_file_context(broken_file)
             
-            patch_code, llm_duration = self.patcher.request_patch(broken_file, context, error_summary)
-            
+            patch_code, reasoning, llm_duration = self.patcher.request_patch(broken_file, context, error_summary)
+
             self.tracker.log_cycle(self.iteration, test_duration, llm_duration)
             
             patch_hash = hashlib.sha256(patch_code.encode()).hexdigest()
@@ -74,7 +81,43 @@ class StateMachineDebugger:
                 break
             self.patch_history.add(patch_hash)
             
-            logger.info(f"Committing architectural patch to disk: {broken_file}")
+            logger.info(f"Preparing to commit architectural patch to disk: {broken_file}")
+            
+            with open(broken_file, 'r') as f:
+                original_code = f.read()
+
+            diff = list(difflib.unified_diff(
+                original_code.splitlines(),
+                patch_code.splitlines(),
+                fromfile=f"Original: {broken_file}",
+                tofile=f"AI Patched: {broken_file}",
+                lineterm=""
+            ))
+
+            # --- THE "RICH" UI DASHBOARD ---
+            # 1. Print the Incident Report Panel
+            report_text = (
+                f"[bold cyan]Target File:[/bold cyan] {broken_file}\n\n"
+                f"[bold yellow]Diagnosis:[/bold yellow] {reasoning}"
+            )
+            console.print(Panel(report_text, title="[bold white]🛠️ AI INCIDENT REPORT[/bold white]", border_style="blue", padding=(1, 2)))
+            
+            # 2. Print the beautifully formatted Diff Panel
+            if diff:
+                diff_text = Text()
+                for line in diff:
+                    if line.startswith('+') and not line.startswith('+++'):
+                        diff_text.append(f"{line}\n", style="bold green")
+                    elif line.startswith('-') and not line.startswith('---'):
+                        diff_text.append(f"{line}\n", style="bold red")
+                    elif not line.startswith('@@') and not line.startswith('---') and not line.startswith('+++'):
+                        diff_text.append(f"{line}\n", style="dim")
+
+                console.print(Panel(diff_text, title="[bold white]Code Changes[/bold white]", border_style="magenta", padding=(1, 2)))
+            else:
+                console.print(f"[dim][No architectural changes detected][/dim]")
+
+            # Write to disk
             with open(broken_file, 'w') as f:
                 f.write(patch_code)
                 

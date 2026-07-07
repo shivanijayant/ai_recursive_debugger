@@ -13,7 +13,7 @@ class CodePatcher:
     def __init__(self):
         self.client = genai.Client()
 
-    def request_patch(self, broken_file: str, context: Dict[str, str], error_msg: str) -> Tuple[str, float]:
+    def request_patch(self, broken_file: str, context: Dict[str, str], error_msg: str) -> Tuple[str, str, float]:
         """Formulates context payloads and requests patches, with a live progress UI."""
         start = time.perf_counter()
         
@@ -35,8 +35,16 @@ class CodePatcher:
 
         ### Directives:
         1. Resolve the localized failure in {broken_file}.
-        2. Output strictly the full revised code for `{broken_file}` inside a single ```python block.
-        3. Exclude all natural language processing output, conversational filler, and markdown.
+        2. You MUST structure your response exactly like this:
+
+        <reasoning>
+        Write 1-2 clear sentences explaining exactly what the bug was and how you fixed it.
+        </reasoning>
+        
+        ```python
+        # Your fully revised code for {broken_file} here
+        ```
+        3. Exclude all other natural language processing output, conversational filler, and markdown.
         """
 
         # --- LIVE PROGRESS UI (Runs in a background thread) ---
@@ -72,8 +80,12 @@ class CodePatcher:
             sys.stdout.write(f"\r✅ Gemini patch generated successfully! [{duration:.2f}s]               \n")
             sys.stdout.flush()
 
-        # Extract the raw code
-        match = re.search(r'```python\n(.*?)\n```', response.text, re.DOTALL)
-        clean_code = match.group(1).strip() if match else response.text.strip()
+        # --- EXTRACT REASONING AND CODE ---
+        reasoning_match = re.search(r'<reasoning>(.*?)</reasoning>', response.text, re.DOTALL)
+        reasoning = reasoning_match.group(1).strip() if reasoning_match else "No diagnostic reasoning provided."
+
+        code_match = re.search(r'```python\n(.*?)\n```', response.text, re.DOTALL)
+        clean_code = code_match.group(1).strip() if code_match else response.text.strip()
         
-        return clean_code, duration
+        # Returns the code, the English explanation, and the timer
+        return clean_code, reasoning, duration

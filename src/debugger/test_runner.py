@@ -1,6 +1,7 @@
 import subprocess
 import sys
 import time
+import os
 import re
 from typing import Tuple, Optional
 from debugger.telemetry import logger
@@ -38,17 +39,26 @@ class TestRunner:
             
             match = re.search(r'([\w\-/\\\.]+\.py):(\d+): (.+)', line)
             if match and is_capture_zone:
-                failing_file = match.group(1)
-                error_messages.append(match.group(3))
-                break
+                candidate_file = match.group(1)
+                
+                # --- UPDATED ANTI-CHEAT ---
+                # Use os.path.basename to strip the folder path before checking
+                filename = os.path.basename(candidate_file)
+                if not filename.startswith("test_") and not filename.endswith("_test.py"):
+                    failing_file = candidate_file
+                    error_messages.append(match.group(3))
+                    break
 
+        # Fallback if the regex missed it
         if not failing_file:
             for line in lines:
                 if self.target_dir in line and ".py" in line:
                     match = re.search(r'([\w\-/\\\.]+\.py)', line)
                     if match:
-                        failing_file = match.group(1)
-                        break
+                        candidate_file = match.group(1)
+                        if not "test_" in candidate_file:
+                            failing_file = candidate_file
+                            break
 
         error_summary = "\n".join(error_messages) if error_messages else "Unhandled execution state."
         return failing_file, error_summary

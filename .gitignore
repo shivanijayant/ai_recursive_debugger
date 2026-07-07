@@ -222,3 +222,4 @@ __marimo__/
 app_workspace/
 target_project/
 .pytest_cache/.venv/
+.venv/
