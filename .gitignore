@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Custom Agentic Debugger overrides
+.env
+app_workspace/
+target_project/
+.pytest_cache/.venv/
